@@ -1,0 +1,211 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+### Load data
+ 
+```{r load-data}
+load("data.Rdata")
+```
+
+
+
+* * *
+
+## Part 1: Data
+The BRFSS is a mostly standardized, nationwide health survey. The optional survey modules differ between states, but this study is not randomly assigned. Instead, the goal is to get as many answers as possible to the same set of questions. It's an observational study. 
+
+The phone numbers selected for the survey are randomly listed from each state's list of phone numbers. The study uses disproportionate stratified sampling, which splits the phone numbers into groups of different densities.Therefore, each phone number (once weighted weighted to adjust for geographic and household denities ) has an equal probability of being selected. 
+
+Although the BRFSS is randomly sampled, it is voluntary, which means it suffers from participatory bias; the kind of person willing to answer questions about their health may not be representative of the general population. Additionally, being able to participate in the survey makes an assumption about a few different variables:
+	
+* access to a registered cellphone/landline
+* ability to speak and understand English
+* no fear of picking up a government number
+* a private residence/college dorm residence
+	
+Thus, there is potential for response and participatory bias in this study. 
+
+The BRFSS makes several [adjustments](https://www.cdc.gov/brfss/annual_data/2017/pdf/overview-2017-508.pdf) to its data collection and weighting in effort to make the sample more representative:
+
+* includes cell phone owners (which make up about 50% of the American population) 
+* weights education level, marital status, homeowner status, as well as race, ethnicity, and gender, so that individual answers collectively becomes more representative of per-state demographics
+
+So, the data has been weighted to compensate for population and geographic differences in sampling, in order to make it as representative of US demographics as possible. 
+
+Causation can only be inferred from a randomized experiment. This study can be treated as a random sample, but it is not randomly assigned. As an observational study, causal links can't be made, but its results can be generalized to a larger population. 
+
+
+* * *
+
+## Part 2: Research questions
+
+**Research quesion 1:**
+Are most people in America insured or uninsured? Is there a correlation between being insured and having better general health?  
+**Research quesion 2:**
+Is there a relationship between any general demographic factors (age, race, income, education), self-evaluated health, and insurance?  
+**Research quesion 3:** 
+Do the uninsured have a particular difficulty accessing healthcare, and does that reflect in their frequency of doctor visits?  
+
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+In order to cut down on the amount of variables, I created a new dataframe, only selectinhg those variables that I thought would be of interest in answering my research questions. This also served to force me to go through the variables and the BRFSS codebook carefully. I included some calculated variables from the BRFSS codebook. 
+
+Before doing anything, I checked for the proportions of missing data in each column. I don't want to use variables that are missing >50% of their data because they won't be representative of the population.
+
+I also created a proportional equivalent to physical,mental,and poor health measurements, because % of days out of 30 is more intuitive than # of days out of 30.
+
+Finally, I removed all rows that were missing a response for calculated health insurance, because the presence of that variable is my focus and without it responses are not useful to me. 
+
+*Sources:*  
+[missing data proportions](https://stackoverflow.com/questions/33512837/calculate-using-dplyr-percentage-of-nas-in-each-column)
+```{r}
+health <- brfss2013 %>%
+select(X_state, genhlth, physhlth, menthlth, poorhlth, hlthpln1, persdoc2, medcost, checkup1, sex, educa, employ1, income2, medicare, hlthcvrg, delaymed, dlyother, nocov121, lstcovrg, drvisits, medscost, carercvd, medbills, scntmony, scntmeal, scntpaid, scntwrk1, scntlpad, scntlwk1, scntvot1, emtsuprt, lsatisfy, X_rfhlth, X_hcvu651, X_race, X_educag, X_ageg5yr, X_incomg)
+
+round(colMeans(is.na(health)) * 100, digits=0)
+
+health <- health %>%
+mutate(physhlth_p = 100 *(physhlth/30),
+       menthlth_p = 100 *(menthlth/30),
+       poorhlth_p = 100 *(poorhlth/30))
+
+health <- health[!is.na(health$X_hcvu651),]
+
+```
+
+
+**Research quesion 1:**
+
+I used a simple bar graph to look at the intersection between two variables: health care coverage and general health. By using count, it's clear that most respondents both have health care and are in generally good health. 
+
+I used summary statistics to take a closer look at the relationship between insurance and health. In more detail you can see a 2-3% positive difference in the mean number of poor physical and mental health days for those who are not insured. So, on average, people without medical care also have more daily health complaints. 
+
+In addition, I wanted to understand how long uninsured people are generally going without medical care, because that effects the significance of their lower reported health. To do this I made a new dataframe with only people who had responded "no coverage" and graphed the distribution of time. The most common response is more than 3yrs. Based on the distribution of data, it seems that more people are without health insurance for significant, semi-periods periods of time than more temporary periods of time. 
+
+**Conclusion:** 
+
+Most people in America are insured. Most people in America consider their general health to be good. However, a higher proportion of uninsured people rate their monthly health lower than insured people. In addition, those who are uninsured tend to be uninsured for long periods of time, suggesting that their higher number of health issues is a significant issue. 
+
+*Sources:*  
+[stacked bar plots](https://stackoverflow.com/questions/47691691/ggplot-stacked-bar-chart-with-counts-on-y-axis-but-percentage-as-label) from J_F and Liis Simmul  
+na.rm=TRUE [workaround](https://stackoverflow.com/questions/17216358/eliminating-nas-from-a-ggplot) from Rafa Pereira   
+tinyverse.org's [ggplot docs](https://ggplot2.tidyverse.org/reference/)    
+
+```{r}
+plot1 <- ggplot(health %>%
+group_by(genhlth) %>%
+count(genhlth, X_hcvu651), aes(genhlth, n, fill=X_hcvu651)) + geom_bar(stat = "identity")
+plot1 + labs(title="Health Care and General Health", x="general health", y="# responses", fill="insurance status")
+
+health %>%
+  group_by(X_hcvu651) %>%
+  summarise_at(vars(physhlth_p, menthlth_p, poorhlth_p), mean, na.rm=TRUE)
+
+no_in <- health %>%
+filter(as.numeric(X_hcvu651) == 2)
+
+plot2 <- ggplot(data=subset(no_in, !is.na(lstcovrg)), aes(lstcovrg)) + stat_count(na.rm=TRUE) + scale_x_discrete("time", labels = c("6 months or less" = "< 6mo", "More than 6 months, but not more than 1 year ago" = "6mo-1yr","More than 1 year, but not more than 3 years ago" = "1-3yr","More than 3 years" = ">3yr","Never" = "never"))
+plot2 + labs(title="Time elapsed since last covered by health insurance", y="# responses")
+```
+
+**Research quesion 2:**
+
+To analyze multiple categorical variables, I wanted to use mosaic plots. I installed [ggmosaic](https://github.com/haleyjeppson/ggmosaic) via devtools and followed cran.r's [documentation] (https://cran.r-project.org/web/packages/ggmosaic/vignettes/ggmosaic.html).
+
+Each plot looks at the relationship between insurance, general health, and a different demographic variable. I focused on four major ones: income bracket, race, and education level. I also looked at sex, but the demographic differences there were not significant. 
+
+Most revealing to me are the income and education graphs. 
+
+For the income graph, the two faceted grids are nearly the reverse of each other. The distribution of incomes shows that (perhaps obviously) it is far more likely that a person without insurance will make <50k a year than a person with insurance. The proportion of people feeling good increases if they have health insurance and even more so if they have a higher income. Interestingly, there is a significantly higher proportion of people who describe their health as "poor" who are low income and insured than low income and uninsured (although the uninsured are generally feeling less well). Perhaps this is due to government services including Medicaid, Medicare, and disability which can sometimes come with insurance benefits.
+
+In the education graph, the trends are similar. Very few people who have health insurance also didn't graduate high school. There is a much larger proportion of insured college graduates than uninsured college graduates. There's a positive relationship between education level and having "excellent" or "very good" health. Again we see a spike in insured people feeling badly, this time among non high school graduates. Again it is likely that these members of society are insured via government aid because of their high level of need. 
+
+The mosaic plot is not particuarly effective for race, partly because breakdown between white and nonwhite is so uneven. I used a contingency table instead, taking row proportions to compare within races rather than soley between races. The biggest takeaway here is that there are more people insured than uninsured regardless of race. However, the proportion of uninsured relative to insured is much higher for nonwhite peoples, except for Asians, than for white peoples. Notably, the frequency of uninsured Hispanic people is half the frequency of uninsured Hispanic people-- this is exceptionally high relative to any other race. 
+
+In order to compute summary statistics I had to convert the factor variables to numbers, which only worked if I did it in two seperate steps, hence the inefficient code. (as.numeric(as.character(x)), recommended in the docs, caused everything to coerce to NA's no matter what I did.) I used median instead of mean because the data is skewed for all of the variables.
+
+**Conclusion:** 
+
+Higher income and higher education achievement are positively correlated with good to excellent general health. Compared to the insured population, the uninsured population has a much significantly larger proportion of people who are nonwhite, low-income, and college non-graduates. The average insured person is white, has attended college or technical school, and is making 50k or more. The average uninsured person is white, has graduated high school, and is making 15k to 25k.   
+
+
+*Sources:*  
+[making tables](https://www.sheffield.ac.uk/polopoly_fs/1.714591!/file/stcp-karadimitriou-categoricalR.pdf)  
+[converting factors to numeric](https://stackoverflow.com/questions/3418128/how-to-convert-a-factor-to-integer-numeric-without-loss-of-information) from Joshua Ulrich and Jaap  
+r factor [documentation](https://cran.r-project.org/doc/FAQ/R-FAQ.html#How-do-I-convert-factors-to-numeric_003f)    
+
+```{r}
+library(ggmosaic)
+
+ggplot(health) + geom_mosaic(aes(x = product(X_incomg, genhlth), fill=genhlth), na.rm=TRUE) + labs(title = "health & income in $") + facet_grid(rows=vars(X_hcvu651)) +  theme(axis.text.x = element_text(angle=25, size=9, hjust=1))
+
+ggplot(health) + geom_mosaic(aes(x = product(X_educag, genhlth), fill=genhlth), na.rm=TRUE) + labs(title="health & education level achieved")+ facet_grid(rows=vars(X_hcvu651)) + theme(axis.text.x = element_text(angle=25, size=9, hjust=1))
+
+race <- table(health$X_race, health$X_hcvu651)
+round(prop.table(race,1) *100, digits=2)
+
+
+health <- health %>%
+mutate(X_incomgN = as.character(X_incomg), X_educagN = as.character(X_educag), X_raceN = as.character(X_race))
+health <- health %>% 
+mutate(X_incomgN = as.numeric(X_incomg), X_educagN = as.numeric(X_educag), X_raceN = as.numeric(X_race))
+
+health %>%
+group_by(X_hcvu651) %>%
+summarise_at(vars(X_incomgN, X_educagN, X_raceN), median, na.rm=TRUE)
+
+```
+
+
+**Research quesion 3:**
+
+I created several frequency tables to analyze potential barriers to medical care: the cost of care, the cost of medicine, and the perception of care quality. I used the no_in dataframe to look for trends within the uninsured. Cost of care is split almost evenly, so it doesn't show evidence of a clear trend. For a majority of respondents, medication cost is not a barrier, and neither is quality of care. Taken into consideration with the earlier findings that many Americans are without insurance for long periods of time, its unclear how ifluential medical access is relative to personal choice on the decision to be uninsured.
+
+Given the inconclusive evidence of barriers, is there a reflection of any barrier in the amount of times the insured and uninsured seek out health care?
+
+I created a contingency table to see if there was a measurable difference in checkup frequency between the insured and uninsured. If access to health care is more difficult for the uninsured, then it would perhaps reflect in the number of times they sought out medical care. And it's likely that people who have health insurance also use the healthcare system more in general. I used column proportions to account for the uneven distribution of health care coverage. Sure enough, a much higher percentage of those with insurance have also had a checkup within a year than those without insurance. In addition, the percentage of those without insurance who haven't had a checkup in over a year is significantly higher than the the insured.
+
+I tested another variable, drvisits, to check for consistency in results. Looking at count wouldn't work for such skewed data, so I used density instead. I followed tidyverse's ggplot frequency-polygon and added a median line for easier comparison. Here it's clear that most people see the doctor once a year, if that. Still, the amount of people who haven't visited the doctor in a year is significantly greater for the uninsured. As the amount of visits increase, the density for both the insured and uninsured decreases, but the insured still are visiting the doctor more. This is consistent with the contingency table above.
+
+**Conclusion:** 
+
+Because there are no clear trends in the barrier data, it's unclear how much important cost is to people without insurance. There isn't evidence of a frequently and consistently cited barrier to medical access. Whether or not they decide to forgeo insurance because of certain barriers, though, the uninsured do tend to visit the doctor less frequently. 
+
+*Sources:*   
+[frequency-polygon plots](https://ggplot2.tidyverse.org/reference/geom_histogram.html)  
+[median line](https://www.rdocumentation.org/packages/ggplot2/versions/0.9.1/topics/geom_vline)  
+
+```{r}
+cost <- table(no_in$medcost)
+round(prop.table(cost)*100, digits=0)
+cost2 <- table(no_in$medscost)
+round(prop.table(cost2) *100, digits=0)
+care <- table(no_in$carercvd)
+round(prop.table(care) *100, digits=0)
+
+check_in <- table(health$checkup1, health$X_hcvu651)
+round(prop.table(check_in,2)*100,digits=0)
+
+visits <- ggplot(health, aes(drvisits, stat(density), colour= X_hcvu651)) + geom_freqpoly(na.rm=TRUE, bins=80) + geom_vline(xintercept = mean(health$drvisits, na.rm=TRUE), linetype=2) 
+visits + labs(title="Number of Doctor Visits in the past year", fill="insurance status")
+
+```
+
