@@ -1,10 +1,9 @@
 ---
 title: "Exploring the BRFSS data"
+author: "Isabella Ciambotti"
 output: 
-  :github_document
+  github_document:
     fig_height: 4
-    highlight: pygments
-    theme: spacelab
 ---
 
 ## Setup
@@ -14,6 +13,7 @@ output:
 ```{r load-packages, message = FALSE}
 library(ggplot2)
 library(dplyr)
+library(rmarkdown)
 ```
 
 ### Load data
